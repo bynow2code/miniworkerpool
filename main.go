@@ -3,7 +3,7 @@ package main
 import "time"
 
 func main() {
-	p := New(500)
+	p := New(500, WithPreAlloc(true))
 
 	for i := 0; i < 10; i++ {
 		err := p.Schedule(func() {

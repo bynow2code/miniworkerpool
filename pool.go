@@ -11,9 +11,11 @@ var (
 )
 
 type Task func()
+type Option func(pool *Pool)
 
 type Pool struct {
-	capacity int // workerpool大小
+	preAlloc bool // 是否在创建pool的时候就预创建workers，默认值为：false
+	capacity int  // workerpool大小
 
 	active chan struct{} // 对应上图中的active channel
 	tasks  chan Task     // 对应上图中的task channel
@@ -27,7 +29,7 @@ const (
 	maxCapacity     = 1000
 )
 
-func New(capacity int) *Pool {
+func New(capacity int, opts ...Option) *Pool {
 	if capacity < 0 {
 		capacity = defaultCapacity
 	}
@@ -36,7 +38,7 @@ func New(capacity int) *Pool {
 		capacity = defaultCapacity
 	}
 
-	pool := &Pool{
+	p := &Pool{
 		capacity: defaultCapacity,
 		active:   make(chan struct{}, capacity),
 		tasks:    make(chan Task),
@@ -44,12 +46,29 @@ func New(capacity int) *Pool {
 		quit:     make(chan struct{}),
 	}
 
+	for _, opt := range opts {
+		opt(p)
+	}
+
 	fmt.Println("workerpool start")
 
-	go pool.run()
+	if p.preAlloc {
+		for i := 1; i <= p.capacity; i++ {
+			p.newWorker(i)
+			p.active <- struct{}{}
+		}
+	}
 
-	return pool
+	go p.run()
 
+	return p
+
+}
+
+func WithPreAlloc(b bool) Option {
+	return func(p *Pool) {
+		p.preAlloc = b
+	}
 }
 
 func (p *Pool) run() {
